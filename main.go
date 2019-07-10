@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	echo2 "github.com/labstack/echo/v4"
 	"net/http"
 )
@@ -142,11 +143,19 @@ func main() {
 		Date:  "1",
 		Rates: Rates{},
 	})
-	svc := NewService(db)
-	e := echo2.New()
-	e.GET("/", svc.GetRate)
-	e.POST("/", svc.CreateRate)
-	e.PUT("/", svc.UpdateRate)
-	e.DELETE("/", svc.DeleteRate)
-	e.Logger.Fatal(e.Start(":8080"))
+
+	rateSvc := &RatesApiService{}
+	rate, err := rateSvc.Get("2019-02-02")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(rate)
+
+	//svc := NewService(db)
+	//e := echo2.New()
+	//e.GET("/", svc.GetRate)
+	//e.POST("/", svc.CreateRate)
+	//e.PUT("/", svc.UpdateRate)
+	//e.DELETE("/", svc.DeleteRate)
+	//e.Logger.Fatal(e.Start(":8080"))
 }
