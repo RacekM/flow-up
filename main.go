@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	echo2 "github.com/labstack/echo/v4"
 	"net/http"
 )
@@ -78,12 +77,17 @@ type GetRequest struct {
 
 func (s *Service) GetRate(c echo2.Context) error {
 	var req GetRequest
+
 	if err := c.Bind(&req); err != nil {
 		return err
 	}
 	rate, e := s.access.Get(req.Day)
 	if e != nil {
-		return e
+		createdRate, err := s.ratesApi.Get(req.Day)
+		if err != nil {
+			return errors.New("Server error")
+		}
+		rate, _ = s.access.Create(createdRate)
 	}
 
 	return c.JSON(http.StatusOK, rate)
@@ -128,34 +132,24 @@ func (s *Service) DeleteRate(c echo2.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func NewService(access Accessor) *Service {
-	return &Service{access}
+func NewService(access Accessor, rateService *RatesApiService) *Service {
+	return &Service{access, rateService}
 }
 
 type Service struct {
-	access Accessor
+	access   Accessor
+	ratesApi *RatesApiService
 }
 
 func main() {
 	db := NewMemDB()
-	db.Create(Rate{
-		Base:  "",
-		Date:  "1",
-		Rates: Rates{},
-	})
-
 	rateSvc := &RatesApiService{}
-	rate, err := rateSvc.Get("2019-02-02")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(rate)
 
-	//svc := NewService(db)
-	//e := echo2.New()
-	//e.GET("/", svc.GetRate)
-	//e.POST("/", svc.CreateRate)
-	//e.PUT("/", svc.UpdateRate)
-	//e.DELETE("/", svc.DeleteRate)
-	//e.Logger.Fatal(e.Start(":8080"))
+	svc := NewService(db, rateSvc)
+	e := echo2.New()
+	e.GET("/", svc.GetRate)
+	e.POST("/", svc.CreateRate)
+	e.PUT("/", svc.UpdateRate)
+	e.DELETE("/", svc.DeleteRate)
+	e.Logger.Fatal(e.Start(":8080"))
 }
