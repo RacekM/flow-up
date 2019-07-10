@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	echo2 "github.com/labstack/echo/v4"
+	"github.com/spf13/viper"
 	"net/http"
+	"time"
 )
 
 type Accessor interface {
@@ -72,7 +74,20 @@ func NewMemDB() MemDB {
 }
 
 type GetRequest struct {
-	Day string
+	Day  string
+	From string
+	To   string
+}
+
+func (s *Service) ensureRateDay(day string) (Rate, error) {
+	s.access.Get(day)
+	if e != nil {
+		createdRate, err := s.ratesApi.Get(day)
+		if err != nil {
+			return Rate{}, errors.New("Server error")
+		}
+		return s.access.Create(createdRate)
+	}
 }
 
 func (s *Service) GetRate(c echo2.Context) error {
@@ -81,16 +96,34 @@ func (s *Service) GetRate(c echo2.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return err
 	}
-	rate, e := s.access.Get(req.Day)
-	if e != nil {
-		createdRate, err := s.ratesApi.Get(req.Day)
-		if err != nil {
-			return errors.New("Server error")
-		}
-		rate, _ = s.access.Create(createdRate)
-	}
+	rate, _ := s.ensureRateDay(req.Day)
 
 	return c.JSON(http.StatusOK, rate)
+}
+
+const (
+	DayLoyout = "2006-01-01"
+)
+
+func (service *Service) findRange(from, to string) ([]Rate, error) {
+	var rates []Rate
+	fromDay, err := time.Parse(DayLoyout, from)
+	if err != nil {
+		return rates, err
+	}
+	toDay, err := time.Parse(DayLoyout, to)
+	if err != nil {
+		return rates, err
+	}
+
+	for day := fromDay; day.Before(toDay); day = day.AddDate(0, 0, 1) {
+		rate, err := service.ensureRateDay(day.String())
+		if err != nil {
+			return nil, err
+		}
+		rates = append(rates, rate)
+	}
+	return rates, nil
 }
 
 func (s *Service) CreateRate(c echo2.Context) error {
@@ -142,6 +175,11 @@ type Service struct {
 }
 
 func main() {
+	viper.SetDefault("port", "8080")
+	viper.AutomaticEnv()
+	viper.AddConfigPath(".")
+	viper.SetConfigFile("config.json")
+
 	db := NewMemDB()
 	rateSvc := &RatesApiService{}
 
