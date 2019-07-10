@@ -81,13 +81,11 @@ type GetRequest struct {
 
 func (s *Service) ensureRateDay(day string) (Rate, error) {
 	s.access.Get(day)
-	if e != nil {
-		createdRate, err := s.ratesApi.Get(day)
-		if err != nil {
-			return Rate{}, errors.New("Server error")
-		}
-		return s.access.Create(createdRate)
+	createdRate, err := s.ratesApi.Get(day)
+	if err != nil {
+		return Rate{}, errors.New("Server error")
 	}
+	return s.access.Create(createdRate)
 }
 
 func (s *Service) GetRate(c echo2.Context) error {
@@ -96,9 +94,15 @@ func (s *Service) GetRate(c echo2.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return err
 	}
-	rate, _ := s.ensureRateDay(req.Day)
 
-	return c.JSON(http.StatusOK, rate)
+	if req.Day != "" {
+		rate, _ := s.ensureRateDay(req.Day)
+		return c.JSON(http.StatusOK, rate)
+	} else {
+		rates, _ := s.findRange(req.From, req.To)
+		return c.JSON(http.StatusOK, rates)
+	}
+
 }
 
 const (
