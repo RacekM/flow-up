@@ -2,7 +2,8 @@ package main
 
 import (
 	"errors"
-	"fmt"
+	echo2 "github.com/labstack/echo/v4"
+	"net/http"
 )
 
 type Accessor interface {
@@ -64,11 +65,88 @@ func (m MemDB) Create(rate Rate) (Rate, error) {
 	return rate, nil
 }
 
+func NewMemDB() MemDB {
+	return MemDB{
+		data: map[string]Rate{},
+	}
+}
+
+type GetRequest struct {
+	Day string
+}
+
+func (s *Service) GetRate(c echo2.Context) error {
+	var req GetRequest
+	if err := c.Bind(&req); err != nil {
+		return err
+	}
+	rate, e := s.access.Get(req.Day)
+	if e != nil {
+		return e
+	}
+
+	return c.JSON(http.StatusOK, rate)
+}
+
+func (s *Service) CreateRate(c echo2.Context) error {
+	var rate Rate
+	if err := c.Bind(&rate); err != nil {
+		return err
+	}
+	r, e := s.access.Create(rate)
+	if e != nil {
+		return e
+	}
+
+	return c.JSON(http.StatusCreated, r)
+}
+
+func (s *Service) UpdateRate(c echo2.Context) error {
+	var rate Rate
+	if err := c.Bind(&rate); err != nil {
+		return err
+	}
+	r, e := s.access.Update(rate)
+	if e != nil {
+		return e
+	}
+
+	return c.JSON(http.StatusOK, r)
+}
+
+func (s *Service) DeleteRate(c echo2.Context) error {
+	var req GetRequest
+	if err := c.Bind(&req); err != nil {
+		return err
+	}
+	e := s.access.Delete(req.Day)
+	if e != nil {
+		return e
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+func NewService(access Accessor) *Service {
+	return &Service{access}
+}
+
+type Service struct {
+	access Accessor
+}
+
 func main() {
-	memDb := MemDB{data:make(map[string]Rate)}
-	rate1 := Rate{"","",Rates{}}
-	memDb.Create(rate1)
-
-	fmt.Println(memDb.Get(rate1.Date))
-
+	db := NewMemDB()
+	db.Create(Rate{
+		Base:  "",
+		Date:  "1",
+		Rates: Rates{},
+	})
+	svc := NewService(db)
+	e := echo2.New()
+	e.GET("/", svc.GetRate)
+	e.POST("/", svc.CreateRate)
+	e.PUT("/", svc.UpdateRate)
+	e.DELETE("/", svc.DeleteRate)
+	e.Logger.Fatal(e.Start(":8080"))
 }
